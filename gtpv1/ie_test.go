@@ -1,6 +1,8 @@
 package gtpv1_test
 
 import (
+	"fmt"
+
 	"github.com/blorticus-go/gtp/gtpv1"
 )
 
@@ -327,3 +329,17 @@ type v1IENamesComparable struct {
 
 // 	return nil
 // }
+
+func compareByteArrays(expected []byte, got []byte) error {
+	if len(expected) != len(got) {
+		return fmt.Errorf("Byte array lengths differ; expected %d bytes, got = %d", len(expected), len(got))
+	}
+
+	for i := 0; i < len(expected); i++ {
+		if expected[i] != got[i] {
+			return fmt.Errorf("At index %d, expected = %02x, got = %02x", i, expected[i], got[i])
+		}
+	}
+
+	return nil
+}

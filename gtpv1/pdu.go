@@ -17,6 +17,18 @@ const (
 	NodeAliveResponse                     MessageType = 5
 	RedirectionRequest                    MessageType = 6
 	RedirectionResponse                   MessageType = 7
+	CreatePDPContextRequest               MessageType = 16
+	CreatePDPContextResponse              MessageType = 17
+	UpdatePDPContextRequest               MessageType = 18
+	UpdatePDPContextResponse              MessageType = 19
+	DeletePDPContextRequest               MessageType = 20
+	DeletePDPContextResponse              MessageType = 21
+	InitiatePDPContextActivationRequest   MessageType = 22
+	InitiatePDPContextActivationResponse  MessageType = 23
+	ErrorIndication                       MessageType = 26
+	PDUNotificationRequest                MessageType = 27
+	PDUNotificationResponse               MessageType = 28
+	PDUNotificationRejectRequest          MessageType = 30
 	PDUNotificationRejectResponse         MessageType = 30
 	SupportedExtensionHeadersNotification MessageType = 31
 	SendRouteingInformationforGPRSRequest MessageType = 32
@@ -68,7 +80,7 @@ const (
 
 var messageNames = []string{
 	"Reserved",
-	"Reserved", "Echo Request", "Echo Response", "Version Not Supported", "Node Alive Request", "Node Alive Response", // 5
+	"Echo Request", "Echo Response", "Version Not Supported", "Node Alive Request", "Node Alive Response", // 5
 	"Redirection Request", "Redirection Response", "Reserved", "Reserved", "Reserved", // 10
 	"Reserved", "Reserved", "Reserved", "Reserved", "Reserved", // 15
 	"Reserved", "Reserved", "Reserved", "Reserved", "Reserved", // 20
@@ -177,8 +189,8 @@ type PDU struct {
 func NewPDU(pduType MessageType, teid uint32) *PDU {
 	return &PDU{
 		Type:   pduType,
-		Length: 8,
-		TEID:   0,
+		Length: 0,
+		TEID:   teid,
 	}
 }
 
@@ -186,7 +198,7 @@ func NewPDU(pduType MessageType, teid uint32) *PDU {
 func (pdu *PDU) UseSequenceNumber(sequenceNumber uint16) *PDU {
 	pdu.SequenceNumber = sequenceNumber
 
-	if pdu.IncludeSequenceNumber == false {
+	if !pdu.IncludeSequenceNumber {
 		pdu.IncludeSequenceNumber = true
 		pdu.Length += 2
 	}
@@ -198,7 +210,7 @@ func (pdu *PDU) UseSequenceNumber(sequenceNumber uint16) *PDU {
 func (pdu *PDU) UseNPDUNumber(number uint8) *PDU {
 	pdu.NPDUNumber = number
 
-	if pdu.IncludeNPDUNumber == false {
+	if !pdu.IncludeNPDUNumber {
 		pdu.IncludeNPDUNumber = true
 		pdu.Length += 1
 	}
@@ -233,6 +245,30 @@ func (pdu *PDU) WithExtensionHeaders(headers []*ExtensionHeader) *PDU {
 		}
 
 		pdu.Length += headerLengthInBytes
+	}
+
+	return pdu
+}
+
+// WithInformationElements add the associated IEs to the PDU.  The IEs are not
+// copied, so they should not be modified after adding them.
+func (pdu *PDU) WithInformationElements(ies []*IE) *PDU {
+	if len(pdu.InformationElements) > 0 {
+		for _, ie := range pdu.InformationElements {
+			pdu.Length -= ie.encodedLength()
+		}
+	}
+
+	pdu.InformationElements = ies
+
+	for _, ie := range ies {
+		ieLength := ie.encodedLength()
+
+		if pdu.Length > 65535-ieLength {
+			panic("information elements are too large for a single PDU")
+		}
+
+		pdu.Length += ie.encodedLength()
 	}
 
 	return pdu
@@ -273,9 +309,19 @@ func (pdu *PDU) Encode() []byte {
 			copy(encoded[indexOfNextByteToWrite+2:i], header.Contents)
 			indexOfNextByteToWrite = i
 		}
+
+		encoded[indexOfNextByteToWrite] = byte(NoMoreHeaders)
+		indexOfNextByteToWrite++
 	}
 
-	return nil
+	for _, ie := range pdu.InformationElements {
+		encodedIE := ie.Encode()
+		i := indexOfNextByteToWrite + len(encodedIE)
+		copy(encoded[indexOfNextByteToWrite:i], encodedIE)
+		indexOfNextByteToWrite = i
+	}
+
+	return encoded
 }
 
 // DecodePDU decodes a stream of bytes that contain either exactly one well-formed

@@ -1,14 +1,15 @@
 package gtpv1_test
 
 import (
+	"testing"
+
 	"github.com/blorticus-go/gtp/gtpv1"
 )
 
 type v1PDUComparable struct {
-	testName     string
-	pduOctets    []byte
-	matchingPdu  *gtpv1.PDU
-	piggybackPdu *gtpv1.PDU
+	testName             string
+	expectedEncodedBytes []byte
+	matchingPdu          *gtpv1.PDU
 }
 
 type v1PDUNamesComparable struct {
@@ -16,25 +17,24 @@ type v1PDUNamesComparable struct {
 	pduType      gtpv1.MessageType
 }
 
-// func TestPDUNames(t *testing.T) {
-// 	// This test set is mostly to make sure the list doesn't accidentally
-// 	// get shifted if values are changed
-// 	testCases := []v1PDUNamesComparable{
-// 		{"Reserved", 0},
-// 		{"Echo Request", 1},
-// 		{"Create Session Response", 33},
-// 		{"Resume Notification", 164},
-// 		{"Reserved", 172},
-// 		{"Modify Access Bearers Request", 211},
-// 		{"MBMS Session Stop Response", 236},
-// 	}
+func TestPDUNames(t *testing.T) {
+	// This test set is mostly to make sure the list doesn't accidentally
+	// get shifted if values are changed
+	testCases := []v1PDUNamesComparable{
+		{"Reserved", 0},
+		{"Echo Request", 1},
+		{"Send Routeing Information for GPRS", 33},
+		{"MS Info Change Notification Response", 129},
+		{"Reserved", 172},
+		{"G-PDU", 255},
+	}
 
-// 	for _, testCase := range testCases {
-// 		if retrievedName := gtpv1.NameOfMessageForType(testCase.pduType); retrievedName != testCase.expectedName {
-// 			t.Errorf("For PDU Message Type (%d), expected name = (%s), got = (%s)", testCase.pduType, testCase.expectedName, retrievedName)
-// 		}
-// 	}
-// }
+	for _, testCase := range testCases {
+		if retrievedName := gtpv1.NameOfMessageForType(testCase.pduType); retrievedName != testCase.expectedName {
+			t.Errorf("For PDU Message Type (%d), expected name = (%s), got = (%s)", testCase.pduType, testCase.expectedName, retrievedName)
+		}
+	}
+}
 
 // func TestPDUDecodeValidCases(t *testing.T) {
 // 	testCases := []v1PDUComparable{
@@ -220,6 +220,39 @@ type v1PDUNamesComparable struct {
 // 	}
 // }
 
+func TestPDUEncodeValid(t *testing.T) {
+	testCases := []v1PDUComparable{
+		{
+			testName: "Properly formatted Create PDP Context Request Encode()",
+			matchingPdu: gtpv1.NewPDU(gtpv1.CreatePDPContextRequest, 0xaabbccdd).WithInformationElements([]*gtpv1.IE{
+				gtpv1.NewIEWithRawData(gtpv1.IMSI, []byte{0, 1, 2, 3, 4, 5, 6, 7}),
+				gtpv1.NewIEWithRawData(gtpv1.TunnelEndpointIdentifierDataI, []byte{0x0a, 0x0b, 0x0c, 0x0d}),
+				gtpv1.NewIEWithRawData(gtpv1.NSAPI, []byte{0x00}),
+				gtpv1.NewIEWithRawData(gtpv1.GSNAddress, []byte{192, 168, 1, 1}),
+				gtpv1.NewIEWithRawData(gtpv1.GSNAddress, []byte{10, 10, 10, 10}),
+				gtpv1.NewIEWithRawData(gtpv1.QualityofServiceProfile, []byte{0x01, 0x02, 0x03}),
+			}),
+			expectedEncodedBytes: []byte{
+				0x20, 0x10, 0x00, 0x24, 0xaa, 0xbb, 0xcc, 0xdd,
+				0x02, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+				0x10, 0x0a, 0x0b, 0x0c, 0x0d,
+				0x14, 0x00,
+				133, 0, 4, 192, 168, 1, 1,
+				133, 0, 4, 10, 10, 10, 10,
+				135, 0, 3, 0x01, 0x02, 0x03,
+			},
+		},
+	}
+
+	for testCaseIndex, testCase := range testCases {
+		encoded := testCase.matchingPdu.Encode()
+
+		if err := compareByteArrays(testCase.expectedEncodedBytes, encoded); err != nil {
+			t.Errorf("on test number (%d): %s", testCaseIndex+1, err.Error())
+		}
+	}
+}
+
 // func TestPDUEncodeValid(t *testing.T) {
 // 	testCases := []v2PDUComparable{
 // 		{
@@ -314,4 +347,4 @@ type v1PDUNamesComparable struct {
 // 	}
 
 // 	return nil
-// }
+// }*

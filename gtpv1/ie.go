@@ -220,11 +220,22 @@ type TypedIE interface {
 	ToIEErrorable() (*IE, error)
 }
 
-// IE is a GTPv1 Information Element.  TotalLength is the DataLength plus the
-// header length.  Data is the BigEndian data bytes.
+// IE is a GTPv1 Information Element.  Data is the BigEndian data bytes.
 type IE struct {
 	Type IEType
 	Data []byte
+}
+
+func (ie *IE) encodedLength() uint16 {
+	if ie.Type < 128 {
+		if dataLength, fixedSizeIsInTheMap := ieSizes[uint8(ie.Type)]; fixedSizeIsInTheMap {
+			return dataLength + 1
+		} else {
+			panic(fmt.Sprintf("information element of type (%d) has no defined length", ie.Type))
+		}
+	} else {
+		return uint16(len(ie.Data)) + 3
+	}
 }
 
 // DecodeIE consumes bytes from the start of a stream to produce a GTPv1 IE.
@@ -314,11 +325,11 @@ func NewIEWithRawDataErrorable(ieType IEType, data []byte) (*IE, error) {
 func (ie *IE) Encode() []byte {
 	var encodedBytes []byte
 	if uint8(ie.Type) < 128 {
-		encodedBytes := make([]byte, len(ie.Data)+1)
+		encodedBytes = make([]byte, len(ie.Data)+1)
 		encodedBytes[0] = byte(ie.Type)
 		copy(encodedBytes[1:], ie.Data)
 	} else {
-		encodedBytes := make([]byte, len(ie.Data)+3)
+		encodedBytes = make([]byte, len(ie.Data)+3)
 		encodedBytes[0] = byte(ie.Type)
 		binary.BigEndian.PutUint16(encodedBytes[1:3], uint16(len(ie.Data)))
 		copy(encodedBytes[3:], ie.Data)
