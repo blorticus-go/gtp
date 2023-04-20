@@ -127,184 +127,160 @@ func NameOfMessageForType(msgType MessageType) string {
 	return messageNames[int(msgType)]
 }
 
-// ExtensionHeader represents a GTPv1 extension header.
+// ExtensionHeaderType is an enum of GTPv1 Extension Header types
+type ExtensionHeaderType uint8
+
+const (
+	NoMoreHeaders                          ExtensionHeaderType = 0
+	MBMSSupportIndication                  ExtensionHeaderType = 1
+	MSInfoChangeReportingSupportIndication ExtensionHeaderType = 2
+	PDCPPDUNumber                          ExtensionHeaderType = 0xc0
+	SuspendRequest                         ExtensionHeaderType = 0xc1
+	SuspendRespoonse                       ExtensionHeaderType = 0xc2
+)
+
+// ExtensionHeader represents a GTPv1 extension header.  Contents must be in network byte order and
+// must not include the next header type.
 type ExtensionHeader struct {
-	ExtensionLength uint8
-	Contents        []byte
+	Type     ExtensionHeaderType
+	Contents []byte
+}
+
+func (h *ExtensionHeader) LengthInDoubleWords() uint8 {
+	// all defined Extension Headers are naturally bounded on a double-word, so assuming
+	// a valid number of bytes were encoded, integer division should be correct.
+	return uint8((len(h.Contents) + 2) / 4)
 }
 
 // PDU represents a GTPv1 PDU.  Version field is omitted because it is always '1' and
-// PT flag is also omitted, because it is always set to 1b.  TotalLength includes
-// complete header length, and body length.
+// PT flag is also omitted, because it is always set to 1b.  Length excludes the
+// mandatory header (the first 8 bytes).
 type PDU struct {
-	Type                MessageType
-	TotalLength         uint16
-	TEID                uint32
-	SequenceNumber      uint16
-	ExtensionHeaders    []*ExtensionHeader
-	InformationElements []*IE
+	Type                  MessageType
+	IncludeSequenceNumber bool
+	IncludeNPDUNumber     bool
+	Length                uint16
+	TEID                  uint32
+	SequenceNumber        uint16
+	NPDUNumber            uint8
+	ExtensionHeaders      []*ExtensionHeader
+	InformationElements   []*IE
 }
 
-// NewPDU constructs a new base GTPv2 PDU.  It uses a builder pattern to
-// add non-mandatory elements, including a TEID and a priority.  A piggybacked
-// PDU is added at the time of encoding and revealed on decoding.  If you change
-// struct values after construction, Encode() may not operate as expected and may
+// NewPDU constructs a new base GTPv1 PDU.  It uses a builder pattern to
+// add non-mandatory elements, including a Sequence Number and Extension headers.
+// If you change struct values after construction, Encode() may not operate as expected and may
 // even panic, so the struct values should usually be treated as read-only.
 // This version of the constructor will panic if the length of the IEs exceeds
 // the maximum PDU length.  If you want to be able to catch this condition,
 // construct the PDU struct manually.
-func NewPDU(pduType MessageType, sequenceNumber uint16, ies []*IE) *PDU {
-	pduLength := uint32(8)
-
-	for _, ie := range ies {
-		// compute of IE length is data length + 4 bytes for IE header
-		pduLength += uint32(len(ie.Data) + 4)
-	}
-
-	if pduLength > 0xffff {
-		panic("Combined IE lengths exceed maximum PDU length")
-	}
-
+func NewPDU(pduType MessageType, teid uint32) *PDU {
 	return &PDU{
-		Type:                pduType,
-		TEID:                0,
-		SequenceNumber:      sequenceNumber,
-		InformationElements: ies,
-		TotalLength:         uint16(pduLength),
+		Type:   pduType,
+		Length: 8,
+		TEID:   0,
 	}
 }
 
-// AddTEID sets the TEID field and the teid presence flag
-func (pdu *PDU) AddTEID(teid uint32) *PDU {
-	pdu.TEID = teid
-	pdu.TotalLength += 4
+// UseSequenceNumber adds a sequence number to the header and sets the S flag
+func (pdu *PDU) UseSequenceNumber(sequenceNumber uint16) *PDU {
+	pdu.SequenceNumber = sequenceNumber
+
+	if pdu.IncludeSequenceNumber == false {
+		pdu.IncludeSequenceNumber = true
+		pdu.Length += 2
+	}
 
 	return pdu
 }
 
-// AddPriority sets the priority field and the priority presence flag
-func (pdu *PDU) AddPriority(priority uint8) *PDU {
+// UseNPDUNumber sets the priority field and the priority presence flag
+func (pdu *PDU) UseNPDUNumber(number uint8) *PDU {
+	pdu.NPDUNumber = number
+
+	if pdu.IncludeNPDUNumber == false {
+		pdu.IncludeNPDUNumber = true
+		pdu.Length += 1
+	}
+
 	return pdu
 }
 
-// Encode encodes the GTPv2 PDU as a byte stream in network byte order,
+// WithExtensionHeaders sets the PDU Extension headers to the set provided.  There
+// is no copy made, so the provided headers should not be modified after they are provided
+// here.  panic if the set causes the PDU to exceed its maximum allowable length.
+func (pdu *PDU) WithExtensionHeaders(headers []*ExtensionHeader) *PDU {
+	if len(pdu.ExtensionHeaders) > 0 {
+		for _, previousHeader := range pdu.ExtensionHeaders {
+			pdu.Length -= uint16((int(previousHeader.LengthInDoubleWords()) * 4))
+		}
+	}
+
+	pdu.ExtensionHeaders = headers
+
+	for _, header := range headers {
+		if (len(header.Contents)+2)%4 != 0 {
+			panic("extension header is not an even multiple of 4 in length")
+		}
+
+		if len(header.Contents) != 1 {
+			panic(fmt.Sprintf("all defined extension headers have a length of 1, but inserted header has a length of (%d)", len(header.Contents)))
+		}
+
+		headerLengthInBytes := uint16(header.LengthInDoubleWords() * 4)
+		if 65535-headerLengthInBytes > pdu.Length {
+			panic("extension headers exceed allowed length for a GTPv1 PDU")
+		}
+
+		pdu.Length += headerLengthInBytes
+	}
+
+	return pdu
+}
+
+// Encode encodes the GTPv1 PDU as a byte stream in network byte order,
 // suitable for trasmission.
 func (pdu *PDU) Encode() []byte {
-	// encoded := make([]byte, pdu.TotalLength)
+	encoded := make([]byte, pdu.Length+8)
 
-	// encoded[0] = 0x40
-	// encoded[1] = uint8(pdu.Type)
-	// binary.BigEndian.PutUint16(encoded[2:4], pdu.TotalLength-4)
+	encoded[0] = 0x20
 
-	// ieOffsetByteIndex := 0
+	encoded[1] = byte(pdu.Type)
+	binary.BigEndian.PutUint16(encoded[2:4], pdu.Length)
+	binary.BigEndian.PutUint32(encoded[4:8], pdu.TEID)
 
-	// if pdu.TEIDFieldIsPresent {
-	// 	encoded[0] |= 0x08
-	// 	binary.BigEndian.PutUint32(encoded[4:8], pdu.TEID)
-	// 	binary.BigEndian.PutUint32(encoded[8:12], pdu.SequenceNumber<<8)
+	indexOfNextByteToWrite := 8
 
-	// 	if pdu.PriorityFieldIsPresent {
-	// 		encoded[0] |= 0x04
-	// 		encoded[11] = pdu.Priority << 4
-	// 	}
-	// 	ieOffsetByteIndex = 12
-	// } else {
-	// 	binary.BigEndian.PutUint32(encoded[4:8], pdu.SequenceNumber<<8)
-	// 	ieOffsetByteIndex = 8
-	// }
+	if pdu.IncludeSequenceNumber {
+		encoded[0] |= 0x02
+		binary.BigEndian.PutUint16(encoded[8:10], pdu.SequenceNumber)
+		indexOfNextByteToWrite = 10
+	}
 
-	// for _, ie := range pdu.InformationElements {
-	// 	encodedIE := ie.Encode()
-	// 	offsetForEndOfIE := ieOffsetByteIndex + len(encodedIE)
+	if pdu.IncludeNPDUNumber {
+		encoded[0] |= 0x01
+		encoded[indexOfNextByteToWrite] = pdu.NPDUNumber
+		indexOfNextByteToWrite++
+	}
 
-	// 	copy(encoded[ieOffsetByteIndex:offsetForEndOfIE], encodedIE)
+	if len(pdu.ExtensionHeaders) > 0 {
+		encoded[0] |= 0x04
 
-	// 	ieOffsetByteIndex = offsetForEndOfIE
-	// }
+		for _, header := range pdu.ExtensionHeaders {
+			encoded[indexOfNextByteToWrite] = byte(header.Type)
+			encoded[indexOfNextByteToWrite+1] = header.LengthInDoubleWords()
+			i := indexOfNextByteToWrite + 2 + len(header.Contents)
+			copy(encoded[indexOfNextByteToWrite+2:i], header.Contents)
+			indexOfNextByteToWrite = i
+		}
+	}
 
-	// return encoded
 	return nil
 }
 
 // DecodePDU decodes a stream of bytes that contain either exactly one well-formed
 // GTPv2 PDU, or two GTPv2 PDUs when the piggyback flag on the first is set to true.
 // Returns an error if the stream cannot be decoded into one or two PDUs.
-func DecodePDU(stream []byte) (pdu *PDU, piggybackedPdu *PDU, err error) {
-	piggybackedPdu = nil
-
-	if len(stream) < 8 {
-		return nil, nil, fmt.Errorf("stream length (%d) too short for a GTPv2 PDU", len(stream))
-	}
-
-	if (stream[0] >> 5) != 2 {
-		return nil, nil, fmt.Errorf("GTPv2 PDU version should be 2, but in stream, it is (%d)", (stream[0] >> 5))
-	}
-
-	hasPiggybackedPdu := (stream[0] & 0x10) == 0x10
-
-	msgLengthFieldValue := binary.BigEndian.Uint16(stream[2:4])
-	totalPduLength := msgLengthFieldValue + 4
-
-	if len(stream) < int(totalPduLength) {
-		return nil, nil, fmt.Errorf("GTPv2 PDU length field is (%d), so total length should be (%d), but stream length is (%d)", msgLengthFieldValue, totalPduLength, len(stream))
-	}
-
-	if !hasPiggybackedPdu {
-		if len(stream) != int(totalPduLength) {
-			return nil, nil, fmt.Errorf("GTPv2 PDU length field is (%d), so total length should be (%d), but stream length is (%d)", msgLengthFieldValue, totalPduLength, len(stream))
-		}
-	} else {
-		piggybackedPduStream := stream[totalPduLength:]
-
-		if (piggybackedPduStream[0] & 0x10) != 0 {
-			return nil, nil, fmt.Errorf("GTPv2 PDU has piggybacked PDU but the piggyback flag for that piggybacked PDU is not 0")
-		}
-
-		piggybackedPdu, _, err = DecodePDU(piggybackedPduStream)
-
-		if err != nil {
-			return nil, nil, fmt.Errorf("on piggybacked PDU: %s", err)
-		}
-
-		if len(stream) != int(totalPduLength)+int(piggybackedPdu.TotalLength) {
-			return nil, nil, fmt.Errorf("stream contains more than single PDU and piggybacked PDU")
-		}
-	}
-
-	teid := uint32(0)
-	sequenceNumber := uint32(0)
-	var headerLength int
-
-	if (stream[0] & 0x08) == 0x08 {
-		teid = binary.BigEndian.Uint32(stream[4:8])
-		sequenceNumber = binary.BigEndian.Uint32(stream[8:12]) >> 8
-		headerLength = 12
-	} else {
-		sequenceNumber = binary.BigEndian.Uint32(stream[4:8]) >> 8
-		headerLength = 8
-	}
-
-	pdu = &PDU{
-		TEID:           teid,
-		SequenceNumber: uint16(sequenceNumber),
-		TotalLength:    totalPduLength,
-		Type:           MessageType(stream[1]),
-	}
-
-	ieSet := make([]*IE, 0, 10)
-
-	for i := headerLength; i < int(totalPduLength); {
-		nextIEInStream, err := DecodeIE(stream[i:])
-
-		if err != nil {
-			return nil, nil, err
-		}
-
-		ieSet = append(ieSet, nextIEInStream)
-
-	}
-
-	pdu.InformationElements = ieSet
-
-	return pdu, piggybackedPdu, nil
+func DecodePDU(stream []byte) (pdu *PDU, err error) {
+	return nil, nil
 }
