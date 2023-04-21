@@ -78,14 +78,69 @@ const (
 	GPDU                                  MessageType = 255
 )
 
+var pduTypeIsDefined = []bool{
+	false,
+	true, true, true, true, true, // 5
+	true, true, false, false, false, // 10
+	false, false, false, false, false, // 15
+	true, true, true, true, true, // 20
+	true, true, true, false, false, // 25
+	true, true, true, false, true, // 30
+	true, true, true, true, true, // 35
+	true, true, false, false, false, // 40
+	false, false, false, false, false, // 45
+	false, false, true, true, true, // 50
+	true, true, true, true, true, // 55
+	true, true, true, true, true, // 60
+	false, false, false, false, false, // 65
+	false, false, false, false, false, // 70
+	false, false, false, false, false, // 75
+	false, false, false, false, false, // 80
+	false, false, false, false, false, // 85
+	false, false, false, false, false, // 90
+	false, false, false, false, false, // 95
+	true, true, true, true, true, // 100
+	true, true, true, true, true, // 105
+	false, false, false, false, false, // 110
+	false, true, true, true, true, // 115
+	true, true, true, true, true, // 120
+	true, false, false, false, false, // 125
+	false, false, true, true, false, // 130
+	false, false, false, false, false, // 135
+	false, false, false, false, false, // 140
+	false, false, false, false, false, // 145
+	false, false, false, false, false, // 150
+	false, false, false, false, false, // 155
+	false, false, false, false, false, // 160
+	false, false, false, false, false, // 165
+	false, false, false, false, false, // 170
+	false, false, false, false, false, // 175
+	false, false, false, false, false, // 180
+	false, false, false, false, false, // 185
+	false, false, false, false, false, // 190
+	false, false, false, false, false, // 195
+	false, false, false, false, false, // 200
+	false, false, false, false, false, // 205
+	false, false, false, false, false, // 210
+	false, false, false, false, false, // 215
+	false, false, false, false, false, // 220
+	false, false, false, false, false, // 225
+	false, false, false, false, false, // 230
+	false, false, false, false, false, // 235
+	false, false, false, false, true, // 240
+	true, false, false, false, false, // 245
+	false, false, false, false, false, // 250
+	false, false, false, true, true, // 255
+}
+
 var messageNames = []string{
 	"Reserved",
 	"Echo Request", "Echo Response", "Version Not Supported", "Node Alive Request", "Node Alive Response", // 5
 	"Redirection Request", "Redirection Response", "Reserved", "Reserved", "Reserved", // 10
 	"Reserved", "Reserved", "Reserved", "Reserved", "Reserved", // 15
-	"Reserved", "Reserved", "Reserved", "Reserved", "Reserved", // 20
-	"Reserved", "Reserved", "Reserved", "Reserved", "Reserved", // 25
-	"Reserved", "Reserved", "Reserved", "Reserved", "PDU Notification Reject Response", // 30
+	"Create PDP Context Request", "Create PDP Context Response", "Update PDP Context Request", "Update PDP Context Response", "Delete PDP Context Request", // 20
+	"Delete PDP Context Response", "Initiate PDP Context Activation Request", "Initiate PDP Context Activation Response", "Reserved", "Reserved", // 25
+	"Error Indication", "PDU Notification Request", "PDU Notification Response", "Reserved", "PDU Notification Reject Response", // 30
 	"Supported Extension Headers Notification", "Send Routeing Information for GPRS Request", "Send Routeing Information for GPRS", "Failure Report Request", "Failure Report Response", // 35
 	"Note MS GPRS Present Request", "Note MS GPRS Present Response", "Reserved", "Reserved", "Reserved", // 40
 	"Reserved", "Reserved", "Reserved", "Reserved", "Reserved", // 45
@@ -151,6 +206,15 @@ const (
 	SuspendRespoonse                       ExtensionHeaderType = 0xc2
 )
 
+var extensionHeaderTypeIsDefined = map[uint8]bool{
+	0:    true,
+	1:    true,
+	2:    true,
+	0xc0: true,
+	0xc1: true,
+	0xc2: true,
+}
+
 // ExtensionHeader represents a GTPv1 extension header.  Contents must be in network byte order and
 // must not include the next header type.
 type ExtensionHeader struct {
@@ -166,7 +230,9 @@ func (h *ExtensionHeader) LengthInDoubleWords() uint8 {
 
 // PDU represents a GTPv1 PDU.  Version field is omitted because it is always '1' and
 // PT flag is also omitted, because it is always set to 1b.  Length excludes the
-// mandatory header (the first 8 bytes).
+// mandatory header (the first 8 bytes).  If the Type is GPDU, InformationElements must
+// be empty.  If Type is not GPDU, the TPDU field must be empty.  If TPDU is populated,
+// it must be the tunnelled T-PDU in network byte order.
 type PDU struct {
 	Type                  MessageType
 	IncludeSequenceNumber bool
@@ -177,6 +243,7 @@ type PDU struct {
 	NPDUNumber            uint8
 	ExtensionHeaders      []*ExtensionHeader
 	InformationElements   []*IE
+	TPDU                  []byte
 }
 
 // NewPDU constructs a new base GTPv1 PDU.  It uses a builder pattern to
@@ -190,6 +257,21 @@ func NewPDU(pduType MessageType, teid uint32) *PDU {
 	return &PDU{
 		Type:   pduType,
 		Length: 0,
+		TEID:   teid,
+	}
+}
+
+// NewGPDU returns a GTPv1 G-PDU (type 255) with the T-PDU data, which
+// must be in network byte order.  The tpdu is not copied, so if that
+// is needed, the caller should copy() first.
+func NewGPDU(teid uint32, tpdu []byte) *PDU {
+	if len(tpdu) > 65535-8 {
+		panic("G-PDU exceeds datagram maximum length")
+	}
+
+	return &PDU{
+		Type:   GPDU,
+		Length: uint16(len(tpdu)),
 		TEID:   teid,
 	}
 }
@@ -324,9 +406,121 @@ func (pdu *PDU) Encode() []byte {
 	return encoded
 }
 
-// DecodePDU decodes a stream of bytes that contain either exactly one well-formed
-// GTPv2 PDU, or two GTPv2 PDUs when the piggyback flag on the first is set to true.
-// Returns an error if the stream cannot be decoded into one or two PDUs.
-func DecodePDU(stream []byte) (pdu *PDU, err error) {
-	return nil, nil
+// DecodePDU decodes the complete bytes from a UDP datagram that contains exactly one well-formed
+// GTPv1 PDU.  Returns an error if the stream cannot be decoded.  All data from
+// stream that are used are copied.
+func DecodePDU(datagram []byte) (pdu *PDU, err error) {
+	if len(datagram) == 0 {
+		return nil, fmt.Errorf("incoming stream is zero length")
+	}
+
+	if datagram[0]&0x20 == 0 {
+		return nil, fmt.Errorf("incorrect version identifier for GTPv1")
+	}
+
+	bytesRemainingToProcess := len(datagram)
+
+	if bytesRemainingToProcess < 8 {
+		return nil, fmt.Errorf("few bytes than minimum required for gtpv1 PDU")
+	}
+
+	pduType := datagram[1]
+	if !pduTypeIsDefined[pduType] {
+		return nil, fmt.Errorf("message type (%d) is not defined", pduType)
+	}
+
+	pdu = &PDU{
+		Type:   MessageType(pduType),
+		Length: binary.BigEndian.Uint16(datagram[2:4]),
+		TEID:   binary.BigEndian.Uint32(datagram[4:8]),
+	}
+
+	bytesRemainingToProcess -= 8
+
+	if pdu.Length != uint16(bytesRemainingToProcess) {
+		return nil, fmt.Errorf("length field value (%d) does not match stream length (%d) less the fixed header length (8)", pdu.Length, len(datagram))
+	}
+
+	if datagram[0]&0x02 != 0 { // Sequence Number flag
+		if bytesRemainingToProcess < 2 {
+			return nil, fmt.Errorf("insufficient bytes in datagram to include a sequence number")
+		}
+
+		pdu.SequenceNumber = binary.BigEndian.Uint16(datagram[8:10])
+		pdu.IncludeSequenceNumber = true
+
+		bytesRemainingToProcess -= 2
+	}
+
+	if datagram[0]&0x01 != 0 { // NPDU Number flag
+		if bytesRemainingToProcess < 1 {
+			return nil, fmt.Errorf("insufficient bytes in datagram to include a N-PDU number")
+		}
+
+		pdu.NPDUNumber = datagram[10]
+		pdu.IncludeNPDUNumber = true
+
+		bytesRemainingToProcess -= 1
+	}
+
+	if datagram[0]&0x04 != 0 { // Extension Header flag
+		if bytesRemainingToProcess < 1 {
+			return nil, fmt.Errorf("expected extension header but ran out of bytes in datagram")
+		}
+
+		extensionHeaders := make([]*ExtensionHeader, 0, 1)
+
+		for i := len(datagram) - bytesRemainingToProcess; datagram[i] != byte(NoMoreHeaders); {
+			if !extensionHeaderTypeIsDefined[uint8(datagram[i])] {
+				return nil, fmt.Errorf("extension header of type (0x%02x) is not defined", datagram[i])
+			}
+
+			if bytesRemainingToProcess < 2 {
+				return nil, fmt.Errorf("expected extension header but ran out of bytes in datagram")
+			}
+
+			nextHeaderLengthInBytes := uint16(datagram[i+1]) * 4
+
+			if bytesRemainingToProcess < int(nextHeaderLengthInBytes) {
+				return nil, fmt.Errorf("expected extension header but ran out of bytes in datagram")
+			}
+
+			contents := make([]byte, int(nextHeaderLengthInBytes))
+			copy(contents, datagram[i+2:i+(int(nextHeaderLengthInBytes)-2)])
+
+			extensionHeaders = append(extensionHeaders, &ExtensionHeader{
+				Type:     ExtensionHeaderType(datagram[i]),
+				Contents: contents,
+			})
+
+			i += int(nextHeaderLengthInBytes)
+			bytesRemainingToProcess -= int(nextHeaderLengthInBytes)
+		}
+
+		pdu.ExtensionHeaders = extensionHeaders
+	}
+
+	if pdu.Type != GPDU {
+		ieSet := make([]*IE, 0, 10)
+
+		for i := len(datagram) - bytesRemainingToProcess; bytesRemainingToProcess > 0; {
+			extractedIE, bytesConsumed, err := DecodeIE(datagram[i:])
+			if err != nil {
+				return nil, err
+			}
+
+			ieSet = append(ieSet, extractedIE)
+
+			i += bytesConsumed
+			bytesRemainingToProcess -= bytesConsumed
+		}
+
+		pdu.InformationElements = ieSet
+	} else {
+		tpdu := make([]byte, bytesRemainingToProcess)
+		copy(tpdu, datagram[len(datagram)-bytesRemainingToProcess:])
+		pdu.TPDU = tpdu
+	}
+
+	return pdu, nil
 }

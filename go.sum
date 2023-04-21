@@ -1,5 +1,7 @@
 github.com/blorticus/gtpv2 v0.1.1 h1:0fUv9Lve8rBaOBj6sTlOvZ+DIhwWcX2ctFoHSwyH0oM=
 github.com/blorticus/gtpv2 v0.1.1/go.mod h1:7MGvjc9XcNn8nZkwHUnDMFi26Hyz4lWA2GlkvhDMoNM=
+github.com/go-test/deep v1.1.0 h1:WOcxcdHcvdgThNXjw0t76K42FXTU7HpNQWHpA2HHNlg=
+github.com/go-test/deep v1.1.0/go.mod h1:5C2ZWiW0ErCdrYzpqxLbTX7MG14M9iiw8DgHncVwcsE=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405 h1:yhCVgyC4o1eVCa2tZl7eS0r+SDo693bJlVdllGtEeKM=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/yaml.v2 v2.4.0 h1:D8xgwECY7CYvx+Y2n4sBz93Jn9JRvxdiyyo8CTfuKaY=

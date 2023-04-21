@@ -214,12 +214,6 @@ func NameOfIEForType(ieType IEType) string {
 	return ieNames[int(ieType)]
 }
 
-// TypedIE represents any IE that has its encoded value converted to a typed struct
-type TypedIE interface {
-	ToIE() *IE
-	ToIEErrorable() (*IE, error)
-}
-
 // IE is a GTPv1 Information Element.  Data is the BigEndian data bytes.
 type IE struct {
 	Type IEType
@@ -239,47 +233,50 @@ func (ie *IE) encodedLength() uint16 {
 }
 
 // DecodeIE consumes bytes from the start of a stream to produce a GTPv1 IE.
-// The TotalLength field of the resulting IE provides the count of bytes
-// from stream that are consumed to produce this IE.  Return an error if
-// decoding fails.
-func DecodeIE(stream []byte) (*IE, error) {
+// streamBytesConsumed is the number of bytes from the start of stream that
+// were consumed to produce IE.
+func DecodeIE(stream []byte) (ie *IE, streamBytesConsumed int, err error) {
 	if len(stream) < 4 {
-		return nil, fmt.Errorf("insufficient octets in stream for a complete GTPv1 IE")
+		return nil, 0, fmt.Errorf("insufficient octets in stream for a complete GTPv1 IE")
 	}
 
 	ieType := uint8(stream[0])
 
-	ie := &IE{
+	ie = &IE{
 		Type: IEType(ieType),
 	}
 
 	if ieType < 128 {
 		if dataLength, thisIsAValidIE := ieSizes[ieType]; !thisIsAValidIE {
-			return nil, fmt.Errorf("no defined length for IE of type (0x%02x)", ieType)
+			return nil, 0, fmt.Errorf("no defined length for IE of type (0x%02x)", ieType)
 		} else {
 			if len(stream) < int(dataLength)+1 {
-				return nil, fmt.Errorf("for IE of type (0x%02x) insufficient bytes in stream", ieType)
+				return nil, 0, fmt.Errorf("for IE of type (0x%02x) insufficient bytes in stream", ieType)
 			}
 
 			ie.Data = make([]byte, dataLength)
 			copy(ie.Data, stream[1:dataLength+1])
+
+			streamBytesConsumed = int(dataLength) + 1
 		}
 	} else {
 		if len(stream) < 3 {
-			return nil, fmt.Errorf("insufficient bytes to retreive TLV length for IE of type (0x%02x)", ieType)
+			return nil, 0, fmt.Errorf("insufficient bytes to retreive TLV length for IE of type (0x%02x)", ieType)
 		}
 
 		dataLength := binary.BigEndian.Uint16(stream[1:3])
 
 		if len(stream) < int(dataLength)+3 {
-			return nil, fmt.Errorf("for IE of type (0x%02x) insufficient bytes in stream", ieType)
+			return nil, 0, fmt.Errorf("for IE of type (0x%02x) insufficient bytes in stream", ieType)
 		}
 
 		ie.Data = make([]byte, dataLength)
 		copy(ie.Data, stream[3:dataLength+3])
+
+		streamBytesConsumed = int(dataLength) + 3
 	}
 
-	return ie, nil
+	return ie, streamBytesConsumed, nil
 }
 
 // NewIEWithRawData creates a new GTPv1 IE, providing it with the data as

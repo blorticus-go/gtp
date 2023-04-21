@@ -4,12 +4,13 @@ import (
 	"testing"
 
 	"github.com/blorticus-go/gtp/gtpv1"
+	"github.com/go-test/deep"
 )
 
 type v1PDUComparable struct {
-	testName             string
-	expectedEncodedBytes []byte
-	matchingPdu          *gtpv1.PDU
+	testName     string
+	encodedBytes []byte
+	matchingPdu  *gtpv1.PDU
 }
 
 type v1PDUNamesComparable struct {
@@ -36,190 +37,6 @@ func TestPDUNames(t *testing.T) {
 	}
 }
 
-// func TestPDUDecodeValidCases(t *testing.T) {
-// 	testCases := []v1PDUComparable{
-// 		{
-// 			testName: "Valid Modify Bearer Request",
-// 			pduOctets: []byte{
-// 				// PDU Header
-// 				0x48, 0x22, 0x00, 0x3e, 0x05, 0x40, 0x3b, 0x2e, 0x00, 0x1a, 0xcc, 0x00,
-// 				// ULI
-// 				0x56, 0x00, 0x0d, 0x00, 0x18, 0x00, 0x11, 0x00, 0xff, 0x00, 0x00, 0x11,
-// 				0x00, 0x0f, 0x42, 0x4d, 0x00,
-// 				// RATType
-// 				0x52, 0x00, 0x01, 0x00, 0x06,
-// 				// Delay Value
-// 				0x5c, 0x00, 0x01, 0x00, 0x00,
-// 				// Bearer Context
-// 				0x5d, 0x00, 0x12, 0x00, 0x49, 0x00, 0x01, 0x00, 0x05, 0x57, 0x00, 0x09,
-// 				0x00, 0x80, 0xe4, 0x03, 0xfb, 0x94, 0xac, 0x13, 0x01, 0xb2,
-// 				// Recovery
-// 				0x03, 0x00, 0x01, 0x00, 0x95,
-// 			},
-// 			matchingPdu: &gtpv1.PDU{
-// 				Type:                     gtpv1.ModifyBearerRequest,
-// 				IsCarryingPiggybackedPDU: false,
-// 				PriorityFieldIsPresent:   false,
-// 				TEIDFieldIsPresent:       true,
-// 				SequenceNumber:           0x00001acc,
-// 				Priority:                 0,
-// 				TEID:                     0x05403b2e,
-// 				TotalLength:              0x0042,
-// 				InformationElements: []*gtpv1.IE{
-// 					{
-// 						Type:           gtpv1.UserLocationInformation,
-// 						InstanceNumber: 0,
-// 						TotalLength:    17,
-// 						Data: []byte{
-// 							0x18, 0x00, 0x11, 0x00, 0xff, 0x00, 0x00, 0x11,
-// 							0x00, 0x0f, 0x42, 0x4d, 0x00,
-// 						},
-// 					},
-// 					{
-// 						Type:           gtpv1.RATType,
-// 						InstanceNumber: 0,
-// 						TotalLength:    5,
-// 						Data:           []byte{0x06},
-// 					},
-// 					{
-// 						Type:           gtpv1.DelayValue,
-// 						InstanceNumber: 0,
-// 						TotalLength:    5,
-// 						Data:           []byte{0x00},
-// 					},
-// 					{
-// 						Type:           gtpv1.BearerContext,
-// 						InstanceNumber: 0,
-// 						TotalLength:    22,
-// 						Data: []byte{
-// 							0x49, 0x00, 0x01, 0x00, 0x05, 0x57, 0x00, 0x09,
-// 							0x00, 0x80, 0xe4, 0x03, 0xfb, 0x94, 0xac, 0x13,
-// 							0x01, 0xb2,
-// 						},
-// 					},
-// 					{
-// 						Type:           gtpv1.RecoveryRestartCounter,
-// 						InstanceNumber: 0,
-// 						TotalLength:    5,
-// 						Data:           []byte{0x95},
-// 					},
-// 				},
-// 			},
-// 			piggybackPdu: nil,
-// 		},
-// 		{
-// 			testName: "Truncated Modify Bearer Requests Piggybacked with another MBR",
-// 			pduOctets: []byte{
-// 				// PDU Header
-// 				0x58, 0x22, 0x00, 0x1e, 0x05, 0x40, 0x3b, 0x2e, 0x00, 0x1a, 0xcc, 0x00,
-// 				// ULI
-// 				0x56, 0x00, 0x0d, 0x00, 0x18, 0x00, 0x11, 0x00, 0xff, 0x00, 0x00, 0x11,
-// 				0x00, 0x0f, 0x42, 0x4d, 0x00,
-// 				// RATType
-// 				0x52, 0x00, 0x01, 0x00, 0x06,
-// 				// Piggybacked PDU Header
-// 				0x48, 0x22, 0x00, 0x28, 0x05, 0x40, 0x3b, 0x2e, 0x00, 0x1a, 0xcc, 0x00,
-// 				// Delay Value
-// 				0x5c, 0x00, 0x01, 0x00, 0x00,
-// 				// Bearer Context
-// 				0x5d, 0x00, 0x12, 0x00, 0x49, 0x00, 0x01, 0x00, 0x05, 0x57, 0x00, 0x09,
-// 				0x00, 0x80, 0xe4, 0x03, 0xfb, 0x94, 0xac, 0x13, 0x01, 0xb2,
-// 				// Recovery
-// 				0x03, 0x00, 0x01, 0x00, 0x95,
-// 			},
-// 			matchingPdu: &gtpv1.PDU{
-// 				Type:                     gtpv1.ModifyBearerRequest,
-// 				IsCarryingPiggybackedPDU: true,
-// 				PriorityFieldIsPresent:   false,
-// 				TEIDFieldIsPresent:       true,
-// 				SequenceNumber:           0x00001acc,
-// 				Priority:                 0,
-// 				TEID:                     0x05403b2e,
-// 				TotalLength:              0x0022,
-// 				InformationElements: []*gtpv1.IE{
-// 					{
-// 						Type:           gtpv1.UserLocationInformation,
-// 						InstanceNumber: 0,
-// 						TotalLength:    17,
-// 						Data: []byte{
-// 							0x18, 0x00, 0x11, 0x00, 0xff, 0x00, 0x00, 0x11,
-// 							0x00, 0x0f, 0x42, 0x4d, 0x00,
-// 						},
-// 					},
-// 					{
-// 						Type:           gtpv1.RATType,
-// 						InstanceNumber: 0,
-// 						TotalLength:    5,
-// 						Data:           []byte{0x06},
-// 					},
-// 				},
-// 			},
-// 			piggybackPdu: &gtpv1.PDU{
-// 				Type:                     gtpv1.ModifyBearerRequest,
-// 				IsCarryingPiggybackedPDU: false,
-// 				PriorityFieldIsPresent:   false,
-// 				TEIDFieldIsPresent:       true,
-// 				SequenceNumber:           0x00001acc,
-// 				Priority:                 0,
-// 				TEID:                     0x05403b2e,
-// 				TotalLength:              0x002c,
-// 				InformationElements: []*gtpv1.IE{
-// 					{
-// 						Type:           gtpv1.DelayValue,
-// 						InstanceNumber: 0,
-// 						TotalLength:    5,
-// 						Data:           []byte{0x00},
-// 					},
-// 					{
-// 						Type:           gtpv1.BearerContext,
-// 						InstanceNumber: 0,
-// 						TotalLength:    22,
-// 						Data: []byte{
-// 							0x49, 0x00, 0x01, 0x00, 0x05, 0x57, 0x00, 0x09,
-// 							0x00, 0x80, 0xe4, 0x03, 0xfb, 0x94, 0xac, 0x13,
-// 							0x01, 0xb2,
-// 						},
-// 					},
-// 					{
-// 						Type:           gtpv1.RecoveryRestartCounter,
-// 						InstanceNumber: 0,
-// 						TotalLength:    5,
-// 						Data:           []byte{0x95},
-// 					},
-// 				},
-// 			},
-// 		},
-// 	}
-
-// 	for _, testCase := range testCases {
-// 		pdu, piggybackPdu, err := gtpv1.DecodePDU(testCase.pduOctets)
-
-// 		if err != nil {
-// 			t.Errorf("(%s) Failed to decode, err = (%s)", testCase.testName, err)
-// 			continue
-// 		}
-
-// 		if err = compareTwoPDUObjects(testCase.matchingPdu, pdu); err != nil {
-// 			t.Errorf("(%s) %s", testCase.testName, err)
-// 		}
-
-// 		if piggybackPdu != nil {
-// 			if testCase.piggybackPdu == nil {
-// 				t.Errorf("(%s) On decode, received unexpected piggybacked PDU", testCase.testName)
-// 			} else {
-// 				if err = compareTwoPDUObjects(testCase.piggybackPdu, piggybackPdu); err != nil {
-// 					t.Errorf("(%s) piggyback PDU: %s", testCase.testName, err)
-// 				}
-// 			}
-// 		} else {
-// 			if testCase.piggybackPdu != nil {
-// 				t.Errorf("(%s) On decode, should have received piggyback PDU, but did not", testCase.testName)
-// 			}
-// 		}
-
-// 	}
-// }
-
 func TestPDUEncodeValid(t *testing.T) {
 	testCases := []v1PDUComparable{
 		{
@@ -232,7 +49,7 @@ func TestPDUEncodeValid(t *testing.T) {
 				gtpv1.NewIEWithRawData(gtpv1.GSNAddress, []byte{10, 10, 10, 10}),
 				gtpv1.NewIEWithRawData(gtpv1.QualityofServiceProfile, []byte{0x01, 0x02, 0x03}),
 			}),
-			expectedEncodedBytes: []byte{
+			encodedBytes: []byte{
 				0x20, 0x10, 0x00, 0x24, 0xaa, 0xbb, 0xcc, 0xdd,
 				0x02, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
 				0x10, 0x0a, 0x0b, 0x0c, 0x0d,
@@ -247,104 +64,44 @@ func TestPDUEncodeValid(t *testing.T) {
 	for testCaseIndex, testCase := range testCases {
 		encoded := testCase.matchingPdu.Encode()
 
-		if err := compareByteArrays(testCase.expectedEncodedBytes, encoded); err != nil {
+		if err := compareByteArrays(testCase.encodedBytes, encoded); err != nil {
 			t.Errorf("on test number (%d): %s", testCaseIndex+1, err.Error())
 		}
 	}
 }
 
-// func TestPDUEncodeValid(t *testing.T) {
-// 	testCases := []v2PDUComparable{
-// 		{
-// 			testName: "Valid Modify Bearer Request",
-// 			pduOctets: []byte{
-// 				// PDU Header
-// 				0x48, 0x22, 0x00, 0x3e, 0x05, 0x40, 0x3b, 0x2e, 0x00, 0x1a, 0xcc, 0x00,
-// 				// ULI
-// 				0x56, 0x00, 0x0d, 0x00, 0x18, 0x00, 0x11, 0x00, 0xff, 0x00, 0x00, 0x11,
-// 				0x00, 0x0f, 0x42, 0x4d, 0x00,
-// 				// RATType
-// 				0x52, 0x00, 0x01, 0x00, 0x06,
-// 				// Delay Value
-// 				0x5c, 0x00, 0x01, 0x00, 0x00,
-// 				// Bearer Context
-// 				0x5d, 0x00, 0x12, 0x00, 0x49, 0x00, 0x01, 0x00, 0x05, 0x57, 0x00, 0x09,
-// 				0x00, 0x80, 0xe4, 0x03, 0xfb, 0x94, 0xac, 0x13, 0x01, 0xb2,
-// 				// Recovery
-// 				0x03, 0x00, 0x01, 0x00, 0x95,
-// 			},
-// 			matchingPdu: gtpv1.NewPDU(gtpv1.ModifyBearerRequest, 0x00001acc, []*gtpv1.IE{
-// 				gtpv1.NewIEWithRawData(gtpv1.UserLocationInformation, []byte{
-// 					0x18, 0x00, 0x11, 0x00, 0xff, 0x00, 0x00, 0x11, 0x00, 0x0f, 0x42, 0x4d, 0x00,
-// 				}),
-// 				gtpv1.NewIEWithRawData(gtpv1.RATType, []byte{0x06}),
-// 				gtpv1.NewIEWithRawData(gtpv1.DelayValue, []byte{0x00}),
-// 				gtpv1.NewIEWithRawData(gtpv1.BearerContext, []byte{
-// 					0x49, 0x00, 0x01, 0x00, 0x05, 0x57, 0x00, 0x09,
-// 					0x00, 0x80, 0xe4, 0x03, 0xfb, 0x94, 0xac, 0x13,
-// 					0x01, 0xb2,
-// 				}),
-// 				gtpv1.NewIEWithRawData(gtpv1.RecoveryRestartCounter, []byte{0x95}),
-// 			}).AddTEID(0x05403b2e),
-// 			piggybackPdu: nil,
-// 		},
-// 	}
+func TestPDUDecodeValid(t *testing.T) {
+	testCases := []v1PDUComparable{
+		{
+			testName: "Properly formatted Create PDP Context Request Encode()",
+			matchingPdu: gtpv1.NewPDU(gtpv1.CreatePDPContextRequest, 0xaabbccdd).WithInformationElements([]*gtpv1.IE{
+				gtpv1.NewIEWithRawData(gtpv1.IMSI, []byte{0, 1, 2, 3, 4, 5, 6, 7}),
+				gtpv1.NewIEWithRawData(gtpv1.TunnelEndpointIdentifierDataI, []byte{0x0a, 0x0b, 0x0c, 0x0d}),
+				gtpv1.NewIEWithRawData(gtpv1.NSAPI, []byte{0x00}),
+				gtpv1.NewIEWithRawData(gtpv1.GSNAddress, []byte{192, 168, 1, 1}),
+				gtpv1.NewIEWithRawData(gtpv1.GSNAddress, []byte{10, 10, 10, 10}),
+				gtpv1.NewIEWithRawData(gtpv1.QualityofServiceProfile, []byte{0x01, 0x02, 0x03}),
+			}),
+			encodedBytes: []byte{
+				0x20, 0x10, 0x00, 0x24, 0xaa, 0xbb, 0xcc, 0xdd,
+				0x02, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+				0x10, 0x0a, 0x0b, 0x0c, 0x0d,
+				0x14, 0x00,
+				133, 0, 4, 192, 168, 1, 1,
+				133, 0, 4, 10, 10, 10, 10,
+				135, 0, 3, 0x01, 0x02, 0x03,
+			},
+		},
+	}
 
-// 	for _, testCase := range testCases {
-// 		encodedPdu := testCase.matchingPdu.Encode()
+	for _, testCase := range testCases {
+		decoded, err := gtpv1.DecodePDU(testCase.encodedBytes)
+		if err != nil {
+			t.Errorf("failed to decode PDU stream: %s", err.Error())
+		}
 
-// 		if encodedPdu == nil {
-// 			t.Errorf("On Encode() expected bytes, got nil")
-// 		} else {
-// 			if err := compareByteArrays(testCase.pduOctets, encodedPdu); err != nil {
-// 				t.Errorf("On Encode(): %s", err)
-// 			}
-// 		}
-// 	}
-// }
-
-// func compareTwoPDUObjects(expected *gtpv1.PDU, got *gtpv1.PDU) error {
-// 	if expected.Type != got.Type {
-// 		return fmt.Errorf("Expected Type = (%d) [%s], got = (%d) [%s]", expected.Type, gtpv1.NameOfMessageForType(expected.Type), got.Type, gtpv1.NameOfMessageForType(got.Type))
-// 	}
-
-// 	if expected.IsCarryingPiggybackedPDU != got.IsCarryingPiggybackedPDU {
-// 		return fmt.Errorf("Expected IsCarryingPiggybackedPDU = (%t), got = (%t)", expected.IsCarryingPiggybackedPDU, got.IsCarryingPiggybackedPDU)
-// 	}
-
-// 	if expected.PriorityFieldIsPresent != got.PriorityFieldIsPresent {
-// 		return fmt.Errorf("Expected PriorityFieldIsPresent = (%t), got = (%t)", expected.PriorityFieldIsPresent, got.PriorityFieldIsPresent)
-// 	}
-
-// 	if expected.TEIDFieldIsPresent != got.TEIDFieldIsPresent {
-// 		return fmt.Errorf("Expected TEIDFieldIsPresent = (%t), got = (%t)", expected.TEIDFieldIsPresent, got.TEIDFieldIsPresent)
-// 	}
-
-// 	if expected.SequenceNumber != got.SequenceNumber {
-// 		return fmt.Errorf("Expected SequenceNumber = (%d), got = (%d)", expected.SequenceNumber, got.SequenceNumber)
-// 	}
-
-// 	if expected.TEID != got.TEID {
-// 		return fmt.Errorf("Expected TEID = (%d), got = (%d)", expected.TEID, got.TEID)
-// 	}
-
-// 	if expected.Priority != got.Priority {
-// 		return fmt.Errorf("Expected Priority = (%d), got = (%d)", expected.Priority, got.Priority)
-// 	}
-
-// 	if expected.TotalLength != got.TotalLength {
-// 		return fmt.Errorf("Expected TotalLength = (%d), got = (%d)", expected.TotalLength, got.TotalLength)
-// 	}
-
-// 	if len(expected.InformationElements) != len(got.InformationElements) {
-// 		return fmt.Errorf("Expected (%d) IEs, got = (%d)", len(expected.InformationElements), len(got.InformationElements))
-// 	}
-
-// 	for ieIndex, expectedIE := range expected.InformationElements {
-// 		if err := compareTwoIEObjects(expectedIE, got.InformationElements[ieIndex]); err != nil {
-// 			return fmt.Errorf("For IE (%d): %s", ieIndex, err)
-// 		}
-// 	}
-
-// 	return nil
-// }*
+		if diff := deep.Equal(testCase.matchingPdu, decoded); diff != nil {
+			t.Errorf("[%s]: %s", testCase.testName, diff)
+		}
+	}
+}
