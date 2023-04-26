@@ -7,4 +7,4 @@ require (
 	gopkg.in/yaml.v2 v2.4.0
 )
 
-require github.com/go-test/deep v1.1.0 // indirect
+require github.com/go-test/deep v1.1.0

@@ -361,7 +361,7 @@ func (pdu *PDU) WithInformationElements(ies []*IE) *PDU {
 func (pdu *PDU) Encode() []byte {
 	encoded := make([]byte, pdu.Length+8)
 
-	encoded[0] = 0x20
+	encoded[0] = 0x30
 
 	encoded[1] = byte(pdu.Type)
 	binary.BigEndian.PutUint16(encoded[2:4], pdu.Length)
