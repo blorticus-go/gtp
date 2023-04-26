@@ -8,3 +8,5 @@ require (
 )
 
 require github.com/go-test/deep v1.1.0
+
+require github.com/blorticus-go/protodef v0.1.2

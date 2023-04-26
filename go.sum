@@ -1,3 +1,5 @@
+github.com/blorticus-go/protodef v0.1.2 h1:PyUFWwKr+sLD/jBet8FCFxd7QiYgNzAL0kn5kqq/GyA=
+github.com/blorticus-go/protodef v0.1.2/go.mod h1:s1DUKrOYlpRBsnthfLrdkWvCFEZ7xZAU+E5X9aylcm4=
 github.com/blorticus/gtpv2 v0.1.1 h1:0fUv9Lve8rBaOBj6sTlOvZ+DIhwWcX2ctFoHSwyH0oM=
 github.com/blorticus/gtpv2 v0.1.1/go.mod h1:7MGvjc9XcNn8nZkwHUnDMFi26Hyz4lWA2GlkvhDMoNM=
 github.com/go-test/deep v1.1.0 h1:WOcxcdHcvdgThNXjw0t76K42FXTU7HpNQWHpA2HHNlg=

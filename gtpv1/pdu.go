@@ -273,6 +273,7 @@ func NewGPDU(teid uint32, tpdu []byte) *PDU {
 		Type:   GPDU,
 		Length: uint16(len(tpdu)),
 		TEID:   teid,
+		TPDU:   tpdu,
 	}
 }
 
@@ -356,9 +357,33 @@ func (pdu *PDU) WithInformationElements(ies []*IE) *PDU {
 	return pdu
 }
 
+// HeaderPadByteCount returns the number of padding bytes required to align the
+// header on a 32-bit boundary
+func (pdu *PDU) HeaderPadByteCount() uint8 {
+	totalHeaderLength := 8
+	if pdu.IncludeSequenceNumber {
+		totalHeaderLength += 2
+	}
+	if pdu.IncludeNPDUNumber {
+		totalHeaderLength++
+	}
+	if len(pdu.ExtensionHeaders) > 0 {
+		totalHeaderLength++
+	}
+
+	if totalHeaderLength&0x03 != 0 {
+		return uint8(4 - (totalHeaderLength & 0x03))
+	}
+
+	return 0
+}
+
 // Encode encodes the GTPv1 PDU as a byte stream in network byte order,
 // suitable for trasmission.
 func (pdu *PDU) Encode() []byte {
+	headerByteCount := pdu.HeaderPadByteCount()
+	pdu.Length += uint16(headerByteCount)
+
 	encoded := make([]byte, pdu.Length+8)
 
 	encoded[0] = 0x30
@@ -396,11 +421,20 @@ func (pdu *PDU) Encode() []byte {
 		indexOfNextByteToWrite++
 	}
 
+	for i := 0; i < int(headerByteCount); i++ {
+		encoded[indexOfNextByteToWrite] = 0
+		indexOfNextByteToWrite++
+	}
+
 	for _, ie := range pdu.InformationElements {
 		encodedIE := ie.Encode()
 		i := indexOfNextByteToWrite + len(encodedIE)
 		copy(encoded[indexOfNextByteToWrite:i], encodedIE)
 		indexOfNextByteToWrite = i
+	}
+
+	if pdu.TPDU != nil {
+		copy(encoded[indexOfNextByteToWrite:], pdu.TPDU)
 	}
 
 	return encoded

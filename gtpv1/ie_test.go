@@ -2,24 +2,22 @@ package gtpv1_test
 
 import (
 	"fmt"
-
-	"github.com/blorticus-go/gtp/gtpv1"
 )
 
-type v1IEComparable struct {
-	ieOctets   []byte
-	matchingIE *gtpv1.IE
-}
+// type v1IEComparable struct {
+// 	ieOctets   []byte
+// 	matchingIE *gtpv1.IE
+// }
 
-type v1IEFailCase struct {
-	name        string
-	inputStream []byte
-}
+// type v1IEFailCase struct {
+// 	name        string
+// 	inputStream []byte
+// }
 
-type v1IENamesComparable struct {
-	expectedName string
-	ieType       gtpv1.IEType
-}
+// type v1IENamesComparable struct {
+// 	expectedName string
+// 	ieType       gtpv1.IEType
+// }
 
 // func TestIENames(t *testing.T) {
 // 	// This test set is mostly to make sure the list doesn't accidentally
